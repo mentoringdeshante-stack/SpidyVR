@@ -44,7 +44,7 @@ Vec3 projectTwoWebs(Vec3 p, const Rope& a, const Rope& b) {
 Swing::Swing(SwingConfig c) : config_(c) {
     const float positive[] = {c.radius,    c.maxRange,     c.minRope,    c.maxSpeed,      c.yankSpeed,
                               c.yankDistance, c.yankWindow, c.fixedStep,  c.wallClearance, c.wallSlope,
-                              c.bendOut,   c.bendClearance, c.bendRope,  c.maxHandSpeed};
+                              c.bendOut,   c.bendClearance, c.bendRope,  c.maxHandSpeed, c.lookSmooth};
     for (float v : positive)
         if (!std::isfinite(v) || v <= 0)
             throw std::invalid_argument("Invalid swing configuration");
@@ -54,7 +54,7 @@ Swing::Swing(SwingConfig c) : config_(c) {
         c.anchorClearance,  c.wallStep,        c.wallCarry,       c.wallWalkSpeed,   c.wallAcceleration,   c.wallBrake,
         c.wallJumpOut,      c.wallJumpUp,      c.wallJumpPause,   c.wallGrace,          c.crestSeconds,
         c.crestPush,        c.crestHop,        c.strandReach,     c.handSlack,          c.groundClearance,
-        c.groundTurn};
+        c.groundTurn,       c.lookSteer};
     for (float v : nonnegative)
         if (!std::isfinite(v) || v < 0)
             throw std::invalid_argument("Invalid swing configuration");
@@ -588,6 +588,7 @@ void Swing::reset(Body b) {
     mount_ = mountLeft_ = 0;
     mounting_ = offered_ = mountOffered_ = false;
     strands_ = 0;
+    lookDir_ = {};
 }
 void Swing::release(int i, EventKind reason) {
     if (webs_[i].attached)
@@ -938,6 +939,24 @@ void Swing::step(float dt, const Input& in, const WorldQueries& world, const Wor
         Vec3 steering = finite(in.move) ? limited(Vec3{in.move.x, 0, in.move.z}, 1) : Vec3{};
         body_.velocity +=
             steering * ((body_.grounded ? config_.groundAcceleration : config_.airAcceleration) * dt);
+        // Gaze steering: held by a web in the air, the head's level look bends
+        // the swing its way, on top of the stick. The head's direction is
+        // averaged first, so a glance at a rooftop does not swerve the swing.
+        if (config_.lookSteer > 0 && !body_.grounded && (bears(0) || bears(1)) && finite(in.look) &&
+            length(in.look) > .5f) {
+            const Vec3 look = normalized(in.look);
+            const float blend = 1 - std::exp(-dt / config_.lookSmooth);
+            lookDir_ = length(lookDir_) < .5f ? look : normalized(lookDir_ + (look - lookDir_) * blend);
+            const Vec3 level{lookDir_.x, 0, lookDir_.z};
+            const float flat = length(level);
+            // Straight up or down says no way to go: full push from a gaze
+            // within about 20 degrees of level, none beyond about 70.
+            const float weight = std::clamp((flat - .35f) / (.94f - .35f), 0.f, 1.f);
+            if (weight > 0)
+                body_.velocity += (level / flat) * (config_.lookSteer * weight * dt);
+        } else {
+            lookDir_ = {};
+        }
         if (body_.grounded) {
             const float damping = std::exp(-5 * dt);
             body_.velocity.x *= damping;

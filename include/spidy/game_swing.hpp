@@ -40,6 +40,11 @@ inline SwingConfig physicsConfig(const Config& c) {
     physics.physical = true;
     physics.taut = true;
     physics.groundClearance = 1.4f;
+    // Where the head looks bends the swing that way, as the camera does in
+    // the game: m/s^2 of push toward the level part of the gaze while a web
+    // holds the body in the air (SwingConfig::lookSteer). Raise it for a
+    // stronger pull toward where you look, 0 to switch it off.
+    physics.lookSteer = 6;
     return physics;
 }
 // MoverStandard applies a velocity command during the physics step after the

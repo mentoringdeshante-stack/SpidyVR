@@ -156,6 +156,15 @@ struct SwingConfig {
     // limit ("throw me too much", "the wind is too strong", "i want the near
     // misses"). 0: none.
     float groundClearance = 0, groundTurn = 15;
+    // Gaze steering: while a web holds the body in the air, the way the head
+    // looks (Input::look, level part only) pushes the swing that way, as the
+    // camera does in the game itself. lookSteer is that push in m/s^2 (0: off,
+    // as before); lookSmooth the seconds over which the head's direction is
+    // averaged, so glancing about does not swerve the swing. Looking straight
+    // up or down says no way to go: the push fades out as the gaze leaves
+    // level. The rope keeps the body on its arc, so this bends the arc, it
+    // does not pull the body off it.
+    float lookSteer = 0, lookSmooth = .25f;
 };
 // The edges one web bends round at most (SwingConfig::physical).
 constexpr int maxBends = 6;
@@ -535,6 +544,8 @@ class Swing {
     // The step the input sample in hand is for (a hand's rate is no faster
     // than its travel over that step).
     float stepSeconds_{};
+    // The head's look, averaged over SwingConfig::lookSmooth (zero: none yet).
+    Vec3 lookDir_{};
     // Webs shot so far (Web::strand).
     std::uint32_t strands_{};
 };
